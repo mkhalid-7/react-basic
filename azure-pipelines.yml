@@ -6,17 +6,123 @@
 trigger:
 - main
 
+variables:
+  Group: "variable"
+  subscriptionId: "eeb9dfdd-9c17-44c3-a4a0-7529399ce200"
+  azureServiceConnection: "mkhalidServicePrincipal"
+  location: "eastus"
+  resourcegroup: "mkhalid-rg"
+  webAppName: "mkhalid-react-222"
+  runtimeStack: 'node|20-LTS'
+
+
 pool:
   vmImage: ubuntu-latest
 
-steps:
-- task: NodeTool@0
-  inputs:
-    versionSpec: '10.x'
-  displayName: 'Install Node.js'
+stages:
+- stage: WebApplication 
+  displayName: Create web application in azure 
+  jobs:
+  - job: webApp
 
-- script: |
-    npm install
-    npm run build
-    npm start
-  displayName: 'npm install and build'
+    steps:
+      - task: AzureResourceManagerTemplateDeployment@3
+        inputs:
+          deploymentScope: 'Subscription'
+          azureResourceManagerConnection: '$(azureServiceConnection)'
+          subscriptionId: '$(subscriptionId)'
+          location: 'East US'
+          templateLocation: 'Linked artifact'
+          csmFile: '.azure/main.bicep'
+          overrideParameters: '-webAppName $(webAppName) -location $(location) -runtimeStack $(runtimeStack)' 
+          deploymentMode: 'Incremental'
+          deploymentName: 'bicepDeployment'
+          # deploymentOutputs: 'bicepOutputs'
+
+- stage: Build
+  displayName: Build stage
+  jobs:
+  - job: Build
+    displayName: Build
+    
+    steps:
+    - task: NodeTool@0
+      inputs:
+        versionSpec: '20.x'
+      displayName: 'Install Node.js'
+    - script: |
+        npm install
+        npm update
+        # npm install express
+        # npm start
+        # npm run build
+      displayName: 'npm install and build'
+
+    - task: ArchiveFiles@2
+      displayName: 'Archive files'
+      inputs:
+        rootFolderOrFile: '$(System.DefaultWorkingDirectory)'
+        includeRootFolder: false
+        archiveType: zip
+        archiveFile: '$(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip'
+        replaceExistingArchive: true
+    # - upload: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
+    # - upload: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
+    #   artifact: drop
+
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish artifact'
+      inputs:
+        pathToPublish: '$(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip'
+        artifactName: 'drop'
+        publishLocation: 'Container'
+
+
+- stage: Deploy
+  displayName: Deploy stage
+  dependsOn: Build
+  condition: succeeded()
+  jobs:
+  - deployment: Deploy
+    displayName: Deploy
+    environment: 'webapp'
+
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: AzureWebApp@1
+            displayName: 'Azure Web App Deployment'
+            inputs:
+              azureSubscription: '$(azureServiceConnection)'
+              appType: 'webAppLinux'
+              appName: '$(webAppName)'
+              package: '$(Pipeline.Workspace)/drop/$(Build.BuildId).zip'
+              runtimeStack: '$(runtimeStack)'
+              startUpCommand: 'npm start'
+              # startUpCommand: 'npm run start'
+
+
+
+####################################################33
+####################################33
+########################################################
+
+# steps:
+# - task: NodeTool@0
+#   inputs:
+#     versionSpec: '20.x'
+#   displayName: 'Install Node.js'
+
+# - script: |
+#     npm install
+#     npm update
+#     npm start
+#     # npm run build
+#   displayName: 'npm install and build'
+  # workingDirectory: 'simple-react-app'
+
+
+# - publish: 'build'
+#   artifact: 'react-app'
+#   displayName: 'Publish React App'

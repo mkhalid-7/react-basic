@@ -33,7 +33,7 @@ stages:
           subscriptionId: '$(subscriptionId)'
           location: 'East US'
           templateLocation: 'Linked artifact'
-          csmFile: '.azure/main.bicep'
+          csmFile: 'main.bicep'
           overrideParameters: '-webAppName $(webAppName) -location $(location) -runtimeStack $(runtimeStack)' 
           deploymentMode: 'Incremental'
           deploymentName: 'bicepDeployment'
